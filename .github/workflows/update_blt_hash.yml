@@ -1,0 +1,66 @@
+name: Update BLT Hash 2
+
+on:
+  push:
+    branches:
+      - autoupdate
+
+env:
+  IDENT: Use keyboard to key in the numpad in-game      #Identifier for the mod.
+  BRANCH_DL: main                                       #Branch hosting the stable release version.
+  BRANCH_UPD: autoupdate                                #Branch hosting the meta.json and SuperBLT_Hasher.py files.
+  CHANGELOG: autoupdate/Changelog.md                    #Branch + Filename for the Changelog-File.
+
+jobs:
+  update-hash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    
+    steps:
+    - name: Checkout Mod Branch
+      uses: actions/checkout@v2
+      with:
+        repository: ${{ github.repository }}
+        ref: ${{ env.BRANCH_DL }}
+        token: ${{ github.token }}
+        path: "${{ github.workspace }}/${{ env.BRANCH_DL }}/"
+        
+    - name: Checkout Updater Branch
+      uses: actions/checkout@v2
+      with:
+        repository: ${{ github.repository }}
+        ref: ${{ env.BRANCH_UPD }}
+        token: ${{ github.token }}
+        path: "${{ github.workspace }}/${{ env.BRANCH_UPD }}/"
+        
+    - name: Calculate Hash
+      id: hash
+      run: |
+        echo "HASH=$(python $GITHUB_WORKSPACE/$BRANCH_UPD/SuperBLT_Hasher.py $GITHUB_WORKSPACE/$BRANCH_DL/)" >> $GITHUB_ENV
+        
+    - name: Create local changes
+      run: |
+        cat <<EOM >$GITHUB_WORKSPACE/$BRANCH_UPD/meta.json
+        [
+            {
+                "ident": "$IDENT",
+                "hash": "$HASH",
+                "download_url": "https://github.com/$GITHUB_REPOSITORY/archive/$BRANCH_DL.zip",
+                "patchnotes_url": "https://github.com/$GITHUB_REPOSITORY/blob/$CHANGELOG"
+            }
+        ]
+        EOM
+        
+    - name: Commit files
+      run: |
+        cd $GITHUB_WORKSPACE/$BRANCH_UPD/
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git commit -m "Change Hash for new Version." -a
+        
+    - name: Push changes
+      uses: ad-m/github-push-action@v0.6.0
+      with:
+        github_token: ${{ github.token }}
+        branch: ${{ env.BRANCH_UPD }}
+        directory: ${{ github.workspace }}/${{ env.BRANCH_UPD }}/
